@@ -6,6 +6,7 @@ from slackeventsapi import SlackEventAdapter
 from flask import request
 import ssl as ssl_lib
 import certifi
+import json
 from onboarding_tutorial import OnboardingTutorial
 
 # Initialize a Flask app to host the events adapter
@@ -18,6 +19,37 @@ slack_web_client = WebClient(token=os.environ['SLACK_BOT_TOKEN'])
 # For simplicity we'll store our app data in-memory with the following data structure.
 # onboarding_tutorials_sent = {"channel": {"user_id": OnboardingTutorial}}
 onboarding_tutorials_sent = {}
+
+poopables_log = [
+
+]
+
+poopables = {
+    1: { "open": False, "last_update": '1581899190'}
+}
+
+def update_poopable_by_event(event):
+    target_poopable = poopables[int(event['poopable_id'])]
+    if event['event_type'] == 'door':
+        target_poopable['open'] = True if event['value'] == 'open' else False
+    app.logger.info(json.dumps(poopables))
+
+@app.route('/poopable/event', methods=['POST'])
+def receive_poopable_event():
+    event = {
+        'time': request.json['time'],
+        'event_type': request.json['event_type'],
+        'value': request.json['value'],
+        'poopable_id': request.json['poopable_id']
+    }
+
+    app.logger.info('receiving event object: '+ json.dumps(event))
+    
+    update_poopable_by_event(event)
+    poopables_log.append(event)
+
+    return '', 204
+
 
 
 def start_onboarding(user_id: str, channel: str):
