@@ -8,6 +8,7 @@ import ssl as ssl_lib
 import certifi
 import json
 from onboarding_tutorial import OnboardingTutorial
+from poopable_response import PoopableResponse
 
 # Initialize a Flask app to host the events adapter
 app = Flask(__name__)
@@ -25,13 +26,16 @@ poopables_log = [
 ]
 
 poopables = {
-    1: { "open": False, "last_update": '1581899190'}
+    1: { "id": 1, "open": False, "last_update": '1581899190'}
 }
+
+subscriptions = {}
 
 def update_poopable_by_event(event):
     target_poopable = poopables[int(event['poopable_id'])]
     if event['event_type'] == 'door':
         target_poopable['open'] = True if event['value'] == 'open' else False
+        target_poopable['last_update'] = event['time']
     app.logger.info(json.dumps(poopables))
 
 @app.route('/poopable/event', methods=['POST'])
@@ -47,6 +51,12 @@ def receive_poopable_event():
     
     update_poopable_by_event(event)
     poopables_log.append(event)
+
+    app.logger.info(subscriptions)
+    app.logger.info("these channels will receive the message")
+
+    for channel_id in subscriptions:
+        push_poopable_status(channel_id)
 
     return '', 204
 
@@ -72,6 +82,15 @@ def start_onboarding(user_id: str, channel: str):
         onboarding_tutorials_sent[channel] = {}
     onboarding_tutorials_sent[channel][user_id] = onboarding_tutorial
 
+def push_poopable_status(channel: str):
+    # Create a new onboarding tutorial.
+    poopable_response = PoopableResponse(channel, poopables)
+
+    # Get the onboarding message payload
+    message = poopable_response.get_message_payload()
+
+    # Post the onboarding message in Slack
+    response = slack_web_client.chat_postMessage(**message)
 
 # # ================ Team Join Event =============== #
 # # When the user first joins a team, the type of the event will be 'team_join'.
@@ -168,9 +187,15 @@ def message(payload):
     channel_id = event.get("channel")
     user_id = event.get("user")
     text = event.get("text")
+    time_stamp = event.get('ts')
     app.logger.info(text)
+
+    app.logger.info(subscriptions)
     if text and text.lower() == "start":
-        return start_onboarding(user_id, channel_id)
+        subscriptions[channel_id] = { "state_time": time_stamp }
+        return push_poopable_status(channel_id)
+    elif text and text.lower() == "stop":
+        subscriptions.pop(channel_id, None)
 
 @app.route('/', methods=['POST'])
 def test():
