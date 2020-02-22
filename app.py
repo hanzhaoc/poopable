@@ -39,6 +39,8 @@ migrate = Migrate(app, db)
 class Poopable(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(128), nullable=False, default="")
+    last_update = db.Column(db.String(10), nullable=False, default="0000000000")
+    opened = db.Column(db.Boolean, nullable=False, default='False')
 
 slack_events_adapter = SlackEventAdapter(SLACK_SIGNING_SECRET, "/slack/events", app)
 
@@ -52,8 +54,18 @@ poopables_log = [
 ]
 
 poopables = {
-    1: { "id": 1, "open": False, "last_update": '1581899190'}
+    # 1: { "id": 1, "open": False, "last_update": '1581899190'}
 }
+
+db_poopables = Poopable.query.all()
+
+for db_poopable in db_poopables:
+    poopables[db_poopable.id] = {
+        "id": db_poopable.id,
+        "open": db_poopable.opened,
+        "last_update": db_poopable.last_update
+    }
+
 
 subscriptions = {}
 
@@ -155,7 +167,9 @@ def test():
     app.logger.info(SLACK_BOT_TOKEN)
     app.logger.info(request.json)
     app.logger.info(slack_events_adapter)
-    return request.json['challenge']
+    app.logger.info(poopables)
+    app.logger.info(db_poopables)
+    return "", 200
 
 
 if __name__ == "__main__":
