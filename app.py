@@ -1,6 +1,7 @@
-import os
-import logging
 from flask import Flask
+from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
+
 from slack import WebClient
 from slackeventsapi import SlackEventAdapter
 from flask import request
@@ -12,8 +13,11 @@ import pymysql.cursors
 from onboarding_tutorial import OnboardingTutorial
 from poopable_response import PoopableResponse
 
+import os
+import logging
 from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv())
+
 # set globals
 RDS_HOST = os.getenv("DB_HOST")
 RDS_PORT = int(os.getenv("DB_PORT", 3306))
@@ -25,6 +29,17 @@ SLACK_SIGNING_SECRET = os.getenv("SLACK_SIGNING_SECRET")
 
 # Initialize a Flask app to host the events adapter
 app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = f"mysql+pymysql://{NAME}:{PASSWORD}@{RDS_HOST}:{RDS_PORT}/{DB_NAME}"
+
+db = SQLAlchemy(app)
+migrate = Migrate(app, db)
+
+#initialize db models
+
+class Poopable(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(128), nullable=False, default="")
+
 slack_events_adapter = SlackEventAdapter(SLACK_SIGNING_SECRET, "/slack/events", app)
 
 # Initialize a Web API client
