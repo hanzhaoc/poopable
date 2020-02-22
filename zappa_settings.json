@@ -1,0 +1,10 @@
+{
+    "dev": {
+        "app_function": "app.app",
+        "profile_name": "default",
+        "project_name": "poopable",
+        "runtime": "python3.7",
+        "s3_bucket": "zappa-fect9gmn7",
+        "aws_region" : "us-east-1"
+    }
+}

@@ -7,18 +7,29 @@ from flask import request
 import ssl as ssl_lib
 import certifi
 import json
+import pymysql.cursors
+
 from onboarding_tutorial import OnboardingTutorial
 from poopable_response import PoopableResponse
 
+from dotenv import load_dotenv, find_dotenv
+load_dotenv(find_dotenv())
+# set globals
+RDS_HOST = os.getenv("DB_HOST")
+RDS_PORT = int(os.getenv("DB_PORT", 3306))
+NAME = os.getenv("DB_USERNAME")
+PASSWORD = os.getenv("DB_PASSWORD")
+DB_NAME = os.getenv("DB_NAME")
+SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
+SLACK_SIGNING_SECRET = os.getenv("SLACK_SIGNING_SECRET")
+
 # Initialize a Flask app to host the events adapter
 app = Flask(__name__)
-slack_events_adapter = SlackEventAdapter(os.environ["SLACK_SIGNING_SECRET"], "/slack/events", app)
+slack_events_adapter = SlackEventAdapter(SLACK_SIGNING_SECRET, "/slack/events", app)
 
 # Initialize a Web API client
-slack_web_client = WebClient(token=os.environ['SLACK_BOT_TOKEN'])
+slack_web_client = WebClient(token=SLACK_BOT_TOKEN)
 
-# For simplicity we'll store our app data in-memory with the following data structure.
-# onboarding_tutorials_sent = {"channel": {"user_id": OnboardingTutorial}}
 onboarding_tutorials_sent = {}
 
 poopables_log = [
@@ -37,6 +48,20 @@ def update_poopable_by_event(event):
         target_poopable['open'] = True if event['value'] == 'open' else False
         target_poopable['last_update'] = event['time']
     app.logger.info(json.dumps(poopables))
+
+def connect():
+    try:
+        cursor = pymysql.cursors.DictCursor
+        conn = pymysql.connect(RDS_HOST, user=NAME, passwd=PASSWORD, db=DB_NAME, port=RDS_PORT, cursorclass=cursor, connect_timeout=5)
+        app.logger.info("SUCCESS: connection to RDS successful")
+        return(conn)
+    except Exception as e:
+        app.logger.exception("Database Connection Error")
+
+@app.route('/', methods=['GET'])
+def index():
+    connect()
+    return '', 200
 
 @app.route('/poopable/event', methods=['POST'])
 def receive_poopable_event():
@@ -59,8 +84,6 @@ def receive_poopable_event():
         push_poopable_status(channel_id)
 
     return '', 204
-
-
 
 def start_onboarding(user_id: str, channel: str):
     # Create a new onboarding tutorial.
@@ -92,92 +115,6 @@ def push_poopable_status(channel: str):
     # Post the onboarding message in Slack
     response = slack_web_client.chat_postMessage(**message)
 
-# # ================ Team Join Event =============== #
-# # When the user first joins a team, the type of the event will be 'team_join'.
-# # Here we'll link the onboarding_message callback to the 'team_join' event.
-# @slack_events_adapter.on("team_join")
-# def onboarding_message(payload):
-#     """Create and send an onboarding welcome message to new users. Save the
-#     time stamp of this message so we can update this message in the future.
-#     """
-#     event = payload.get("event", {})
-
-#     # Get the id of the Slack user associated with the incoming event
-#     user_id = event.get("user", {}).get("id")
-
-#     # Open a DM with the new user.
-#     response = slack_web_client.im_open(user_id)
-#     channel = response["channel"]["id"]
-
-#     # Post the onboarding message.
-#     start_onboarding(user_id, channel)
-
-
-# # ============= Reaction Added Events ============= #
-# # When a users adds an emoji reaction to the onboarding message,
-# # the type of the event will be 'reaction_added'.
-# # Here we'll link the update_emoji callback to the 'reaction_added' event.
-# @slack_events_adapter.on("reaction_added")
-# def update_emoji(payload):
-#     """Update the onboarding welcome message after receiving a "reaction_added"
-#     event from Slack. Update timestamp for welcome message as well.
-#     """
-#     event = payload.get("event", {})
-
-#     channel_id = event.get("item", {}).get("channel")
-#     user_id = event.get("user")
-
-#     if channel_id not in onboarding_tutorials_sent:
-#         return
-
-#     # Get the original tutorial sent.
-#     onboarding_tutorial = onboarding_tutorials_sent[channel_id][user_id]
-
-#     # Mark the reaction task as completed.
-#     onboarding_tutorial.reaction_task_completed = True
-
-#     # Get the new message payload
-#     message = onboarding_tutorial.get_message_payload()
-
-#     # Post the updated message in Slack
-#     updated_message = slack_web_client.chat_update(**message)
-
-#     # Update the timestamp saved on the onboarding tutorial object
-#     onboarding_tutorial.timestamp = updated_message["ts"]
-
-
-# # =============== Pin Added Events ================ #
-# # When a users pins a message the type of the event will be 'pin_added'.
-# # Here we'll link the update_pin callback to the 'reaction_added' event.
-# @slack_events_adapter.on("pin_added")
-# def update_pin(payload):
-#     """Update the onboarding welcome message after receiving a "pin_added"
-#     event from Slack. Update timestamp for welcome message as well.
-#     """
-#     event = payload.get("event", {})
-
-#     channel_id = event.get("channel_id")
-#     user_id = event.get("user")
-
-#     # Get the original tutorial sent.
-#     onboarding_tutorial = onboarding_tutorials_sent[channel_id][user_id]
-
-#     # Mark the pin task as completed.
-#     onboarding_tutorial.pin_task_completed = True
-
-#     # Get the new message payload
-#     message = onboarding_tutorial.get_message_payload()
-
-#     # Post the updated message in Slack
-#     updated_message = slack_web_client.chat_update(**message)
-
-#     # Update the timestamp saved on the onboarding tutorial object
-#     onboarding_tutorial.timestamp = updated_message["ts"]
-
-
-# ============== Message Events ============= #
-# When a user sends a DM, the event type will be 'message'.
-# Here we'll link the message callback to the 'message' event.
 @slack_events_adapter.on("message")
 def message(payload):
     """Display the onboarding welcome message after receiving a message
@@ -199,8 +136,8 @@ def message(payload):
 
 @app.route('/', methods=['POST'])
 def test():
-    app.logger.info(os.environ["SLACK_SIGNING_SECRET"])
-    app.logger.info(os.environ["SLACK_BOT_TOKEN"])
+    app.logger.info(SLACK_SIGNING_SECRET)
+    app.logger.info(SLACK_BOT_TOKEN)
     app.logger.info(request.json)
     app.logger.info(slack_events_adapter)
     return request.json['challenge']
