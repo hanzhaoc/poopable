@@ -49,13 +49,9 @@ slack_web_client = WebClient(token=SLACK_BOT_TOKEN)
 
 onboarding_tutorials_sent = {}
 
-poopables_log = [
+poopables_log = []
 
-]
-
-poopables = {
-    # 1: { "id": 1, "open": False, "last_update": '1581899190'}
-}
+poopables = {}
 
 db_poopables = Poopable.query.all()
 
@@ -63,9 +59,8 @@ for db_poopable in db_poopables:
     poopables[db_poopable.id] = {
         "id": db_poopable.id,
         "open": db_poopable.opened,
-        "last_update": db_poopable.last_update
+        "last_update": db_poopable.last_update,
     }
-
 
 subscriptions = {}
 
@@ -74,21 +69,6 @@ def update_poopable_by_event(event):
     if event['event_type'] == 'door':
         target_poopable['open'] = True if event['value'] == 'open' else False
         target_poopable['last_update'] = event['time']
-    app.logger.info(json.dumps(poopables))
-
-def connect():
-    try:
-        cursor = pymysql.cursors.DictCursor
-        conn = pymysql.connect(RDS_HOST, user=NAME, passwd=PASSWORD, db=DB_NAME, port=RDS_PORT, cursorclass=cursor, connect_timeout=5)
-        app.logger.info("SUCCESS: connection to RDS successful")
-        return(conn)
-    except Exception as e:
-        app.logger.exception("Database Connection Error")
-
-@app.route('/', methods=['GET'])
-def index():
-    connect()
-    return '', 200
 
 @app.route('/poopable/event', methods=['POST'])
 def receive_poopable_event():
@@ -113,40 +93,27 @@ def receive_poopable_event():
     return '', 204
 
 def start_onboarding(user_id: str, channel: str):
-    # Create a new onboarding tutorial.
     onboarding_tutorial = OnboardingTutorial(channel)
 
-    # Get the onboarding message payload
     message = onboarding_tutorial.get_message_payload()
 
-    # Post the onboarding message in Slack
     response = slack_web_client.chat_postMessage(**message)
 
-    # Capture the timestamp of the message we've just posted so
-    # we can use it to update the message after a user
-    # has completed an onboarding task.
     onboarding_tutorial.timestamp = response["ts"]
 
-    # Store the message sent in onboarding_tutorials_sent
     if channel not in onboarding_tutorials_sent:
         onboarding_tutorials_sent[channel] = {}
     onboarding_tutorials_sent[channel][user_id] = onboarding_tutorial
 
 def push_poopable_status(channel: str):
-    # Create a new onboarding tutorial.
     poopable_response = PoopableResponse(channel, poopables)
 
-    # Get the onboarding message payload
     message = poopable_response.get_message_payload()
 
-    # Post the onboarding message in Slack
     response = slack_web_client.chat_postMessage(**message)
 
 @slack_events_adapter.on("message")
 def message(payload):
-    """Display the onboarding welcome message after receiving a message
-    that contains "start".
-    """
     event = payload.get("event", {})
     channel_id = event.get("channel")
     user_id = event.get("user")
@@ -160,16 +127,6 @@ def message(payload):
         return push_poopable_status(channel_id)
     elif text and text.lower() == "stop":
         subscriptions.pop(channel_id, None)
-
-@app.route('/', methods=['POST'])
-def test():
-    app.logger.info(SLACK_SIGNING_SECRET)
-    app.logger.info(SLACK_BOT_TOKEN)
-    app.logger.info(request.json)
-    app.logger.info(slack_events_adapter)
-    app.logger.info(poopables)
-    app.logger.info(db_poopables)
-    return "", 200
 
 
 if __name__ == "__main__":
