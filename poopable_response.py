@@ -1,11 +1,11 @@
 class PoopableResponse:
 
-    def __init__(self, channel, poopables):
+    def __init__(self, channel, poopable):
         self.channel = channel
         self.username = "Poopable"
         self.icon_emoji = ":happy:"
         self.timestamp = ""
-        self.poopables = poopables
+        self.poopable = poopable
 
     def get_message_payload(self):
         return {
@@ -14,7 +14,7 @@ class PoopableResponse:
             "username": self.username,
             "icon_emoji": self.icon_emoji,
             "blocks": [
-                *self._get_poopable_status_block(self.poopables[1])
+                *self._get_poopable_status_block(self.poopable)
             ],
         }
 

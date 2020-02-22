@@ -36,20 +36,28 @@ migrate = Migrate(app, db)
 
 #initialize db models
 
+users_prefered_poopables = db.Table('users_prefered_poopables',
+    db.Column('slack_user_id', db.String(9), db.ForeignKey('user.slack_user_id'), primary_key=True),
+    db.Column('poopable_id', db.Integer, db.ForeignKey('poopable.id'), primary_key=True)
+)
+
 class Poopable(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(128), nullable=False, default="")
     last_update = db.Column(db.String(10), nullable=False, default="0000000000")
     opened = db.Column(db.Boolean, nullable=False, default='False')
 
-slack_events_adapter = SlackEventAdapter(SLACK_SIGNING_SECRET, "/slack/events", app)
+class User(db.Model):
+    slack_user_id = db.Column(db.String(9), primary_key=True)
+    prefered_poopables = db.relationship('Poopable', secondary=users_prefered_poopables, lazy='subquery',
+        backref=db.backref('prefered_by_users', lazy=True))
+
 
 # Initialize a Web API client
+slack_events_adapter = SlackEventAdapter(SLACK_SIGNING_SECRET, "/slack/events", app)
 slack_web_client = WebClient(token=SLACK_BOT_TOKEN)
 
 onboarding_tutorials_sent = {}
-
-poopables_log = []
 
 poopables = {}
 
@@ -82,7 +90,6 @@ def receive_poopable_event():
     app.logger.info('receiving event object: '+ json.dumps(event))
     
     update_poopable_by_event(event)
-    poopables_log.append(event)
 
     app.logger.info(subscriptions)
     app.logger.info("these channels will receive the message")
@@ -105,8 +112,8 @@ def start_onboarding(user_id: str, channel: str):
         onboarding_tutorials_sent[channel] = {}
     onboarding_tutorials_sent[channel][user_id] = onboarding_tutorial
 
-def push_poopable_status(channel: str):
-    poopable_response = PoopableResponse(channel, poopables)
+def push_poopable_status(channel: str, poopable):
+    poopable_response = PoopableResponse(channel, poopable)
 
     message = poopable_response.get_message_payload()
 
@@ -119,12 +126,33 @@ def message(payload):
     user_id = event.get("user")
     text = event.get("text")
     time_stamp = event.get('ts')
+
+    if not (event and channel_id and user_id and text and time_stamp): return 'invalid payload', 422
+
     app.logger.info(text)
+    app.logger.info(user_id)
+
+
+
+    user = User.query.get(user_id)
+    if user is None:  
+        user = User(slack_user_id=user_id)
+        user.prefered_poopables = [Poopable.query.get(1)]
+        app.logger.info(user)
+        db.session.add(user)
+        db.session.commit()
+    
+    prefered_poopable = user.prefered_poopables.pop()
+
+    target_poopable = poopables[prefered_poopable.id]
+
+    
+    #poopable = user's choice | user prefered poopable | 1
 
     app.logger.info(subscriptions)
     if text and text.lower() == "start":
         subscriptions[channel_id] = { "state_time": time_stamp }
-        return push_poopable_status(channel_id)
+        return push_poopable_status(channel_id, target_poopable)
     elif text and text.lower() == "stop":
         subscriptions.pop(channel_id, None)
 
