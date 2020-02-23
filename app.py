@@ -68,6 +68,7 @@ for db_poopable in db_poopables:
         "id": db_poopable.id,
         "open": db_poopable.opened,
         "last_update": db_poopable.last_update,
+        "name": db_poopable.name
     }
 
 subscriptions = {}
@@ -128,11 +129,6 @@ def message(payload):
     time_stamp = event.get('ts')
 
     if not (event and channel_id and user_id and text and time_stamp): return 'invalid payload', 422
-
-    app.logger.info(text)
-    app.logger.info(user_id)
-
-
 
     user = User.query.get(user_id)
     if user is None:  

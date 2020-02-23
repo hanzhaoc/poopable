@@ -20,9 +20,8 @@ class PoopableResponse:
 
     def _get_poopable_status_block(self, poopable):
         text = (
-            f"{poopable['id']} is the poopable you are subscribing now\n"
-            f"right now the poopable status is {str(poopable['open'])}"
-        )
+            self._get_status_sentence(poopable_name=poopable['name'], open=poopable['open'])
+            )
         information = (
             ":information_source: *<https://get.slack.help/hc/en-us/articles/206870317-Emoji-reactions|"
             "Learn How to Use Emoji Reactions>*"
@@ -35,3 +34,7 @@ class PoopableResponse:
             {"type": "section", "text": {"type": "mrkdwn", "text": text}},
             {"type": "context", "elements": [{"type": "mrkdwn", "text": information}]},
         ]
+    
+    @staticmethod
+    def _get_status_sentence(poopable_name: str, open: bool):
+        return f"{':runner:' if open else ':lock:'} The door of {poopable_name} is {'opened' if open else 'closed'}"
