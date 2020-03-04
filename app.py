@@ -100,18 +100,22 @@ def receive_poopable_event():
 
     return '', 204
 
-def start_onboarding(user_id: str, channel: str):
-    onboarding_tutorial = OnboardingTutorial(channel)
+def start_onboarding(user_id: str, channel_id: str):
+
+    #create user and give a default poopable
+
+    user = User(slack_user_id=user_id)
+
+    user.prefered_poopables = [Poopable.query.get(1)]
+    db.session.add(user)
+    db.session.commit()
+
+    #create on boarding tutorial and sent it to user
+    onboarding_tutorial = OnboardingTutorial(channel_id)
 
     message = onboarding_tutorial.get_message_payload()
 
     response = slack_web_client.chat_postMessage(**message)
-
-    onboarding_tutorial.timestamp = response["ts"]
-
-    if channel not in onboarding_tutorials_sent:
-        onboarding_tutorials_sent[channel] = {}
-    onboarding_tutorials_sent[channel][user_id] = onboarding_tutorial
 
 def push_poopable_status(channel: str, poopable):
     poopable_response = PoopableResponse(channel, poopable)
@@ -130,27 +134,20 @@ def message(payload):
 
     if not (event and channel_id and user_id and text and time_stamp): return 'invalid payload', 422
 
-    user = User.query.get(user_id)
-    if user is None:  
-        user = User(slack_user_id=user_id)
-        user.prefered_poopables = [Poopable.query.get(1)]
-        app.logger.info(user)
-        db.session.add(user)
-        db.session.commit()
-    
-    prefered_poopable = user.prefered_poopables.pop()
+    if text.lower() == 'poop':
+        user = User.query.get(user_id)
+        if user is None:  
+            return start_onboarding(user_id, channel_id)
+        else:
+            prefered_poopable = user.prefered_poopables[0]
+            target_poopable = poopables[prefered_poopable.id]
+            subscriptions[channel_id] = { "start_time": time_stamp }
+            return push_poopable_status(channel_id, target_poopable)
+    elif text.lower() == 'stop':
+        return subscriptions.pop(channel_id, None)
+    else:
+        return
 
-    target_poopable = poopables[prefered_poopable.id]
-
-    
-    #poopable = user's choice | user prefered poopable | 1
-
-    app.logger.info(subscriptions)
-    if text and text.lower() == "start":
-        subscriptions[channel_id] = { "state_time": time_stamp }
-        return push_poopable_status(channel_id, target_poopable)
-    elif text and text.lower() == "stop":
-        subscriptions.pop(channel_id, None)
 
 
 if __name__ == "__main__":

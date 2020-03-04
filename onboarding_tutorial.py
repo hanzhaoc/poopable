@@ -6,11 +6,39 @@ class OnboardingTutorial:
         "text": {
             "type": "mrkdwn",
             "text": (
-                "Welcome to Slack! :wave: We're so glad you're here. :blush:\n\n"
-                "*Get started by completing the steps below:*"
+                "Welcome to Poopable! :wave: Our target is to ensure you always get a stall when walk into restrooms. :blush:\n\n"
+                "*Please choose your default poopable below:*"
             ),
         },
     }
+
+    SELECT_POOPABLE_BLOCK = {
+        "type": "section",
+        "block_id": "section678",
+        "text": {
+        "type": "mrkdwn",
+        "text": "Pick an item from the dropdown list"
+        },
+        "accessory": {
+            "action_id": "text1234",
+            "type": "static_select",
+            "placeholder": {
+                "type": "plain_text",
+                "text": "Select an item"
+            },
+            "options": [
+                {
+                    "text": {
+                        "type": "plain_text",
+                        "text": "*this is plain_text text*"
+                },
+                    "value": "value-0"
+                }
+            ]
+        }
+    }
+    
+
     DIVIDER_BLOCK = {"type": "divider"}
 
     def __init__(self, channel):
@@ -29,10 +57,7 @@ class OnboardingTutorial:
             "icon_emoji": self.icon_emoji,
             "blocks": [
                 self.WELCOME_BLOCK,
-                self.DIVIDER_BLOCK,
-                *self._get_reaction_block(),
-                self.DIVIDER_BLOCK,
-                *self._get_pin_block(),
+                self.SELECT_POOPABLE_BLOCK,
             ],
         }
 
