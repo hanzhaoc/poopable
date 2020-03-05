@@ -6,7 +6,7 @@ class OnboardingTutorial:
         "text": {
             "type": "mrkdwn",
             "text": (
-                "Welcome to Poopable! :wave: Our target is to ensure you always get a stall when walk into restrooms. :blush:\n\n"
+                "Welcome to Poopable! :wave: Your Poopable is always one slack away. :blush:\n\n"
                 "*Please choose your default poopable below:*"
             ),
         },
@@ -30,10 +30,10 @@ class OnboardingTutorial:
                 {
                     "text": {
                         "type": "plain_text",
-                        "text": "*this is plain_text text*"
+                        "text": "text0"
                 },
-                    "value": "value-0"
-                }
+                    "value": "1"
+                },
             ]
         }
     }
