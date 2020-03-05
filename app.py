@@ -144,7 +144,7 @@ def message_actions():
     db.session.add(user)
     db.session.commit()
 
-    subscriptions[channel_id] = {
+    subscriptions[channel] = {
         "start_time": ts, "user_id": user_id}
     onboarding_tutorial = OnboardingTutorial(channel)
 
