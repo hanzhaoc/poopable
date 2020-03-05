@@ -36,6 +36,12 @@ migrate = Migrate(app, db)
 
 # initialize db models
 
+
+class Poopable(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(128), nullable=False, default="")
+
+
 users_prefered_poopables = db.Table('users_prefered_poopables',
                                     db.Column('slack_user_id', db.String(9), db.ForeignKey(
                                         'user.slack_user_id'), primary_key=True),
@@ -44,18 +50,18 @@ users_prefered_poopables = db.Table('users_prefered_poopables',
                                     )
 
 
-class Poopable(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(128), nullable=False, default="")
-    last_update = db.Column(
-        db.String(10), nullable=False, default="0000000000")
-    opened = db.Column(db.Boolean, nullable=False, default='False')
-
-
 class User(db.Model):
     slack_user_id = db.Column(db.String(9), primary_key=True)
     prefered_poopables = db.relationship('Poopable', secondary=users_prefered_poopables, lazy='subquery',
                                          backref=db.backref('prefered_by_users', lazy=True))
+
+
+class Log(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    last_update = db.Column(
+        db.String(10), nullable=False)
+    opened = db.Column(db.Boolean, nullable=False)
+    poopable_id = db.Column(db.Integer, db.ForeignKey('poopable.id'))
 
 
 # Initialize a Web API client
@@ -65,26 +71,27 @@ slack_web_client = WebClient(token=SLACK_BOT_TOKEN)
 
 onboarding_tutorials_sent = {}
 
-poopables = {}
-
-db_poopables = Poopable.query.all()
-
-for db_poopable in db_poopables:
-    poopables[db_poopable.id] = {
-        "id": db_poopable.id,
-        "open": db_poopable.opened,
-        "last_update": db_poopable.last_update,
-        "name": db_poopable.name
-    }
-
 subscriptions = {}
 
 
+def get_poopable(poopable_id):
+    print(poopable_id, Poopable.query.get(poopable_id).__dict__)
+    poopable = Poopable.query.get(poopable_id)
+    result = Log.query.filter_by(poopable_id=poopable_id)[-1].__dict__
+    result['name'] = poopable.name
+    return result
+
+
 def update_poopable_by_event(event):
-    target_poopable = poopables[int(event['poopable_id'])]
+    poopable_id = int(event['poopable_id'])
+    target_poopable = get_poopable(poopable_id)
     if event['event_type'] == 'door':
-        target_poopable['open'] = True if event['value'] == 'open' else False
-        target_poopable['last_update'] = event['time']
+        status = True if event['value'] == 'open' else False
+        db.session.add(
+            Log(opened=status, last_update=event['time'], poopable_id=poopable_id))
+        db.session.commit()
+        # target_poopable['open'] = True if event['value'] == 'open' else False
+        # target_poopable['last_update'] = event['time']
 
 
 @app.route('/poopable/event', methods=['POST'])
@@ -106,7 +113,7 @@ def receive_poopable_event():
     for channel_id in subscriptions:
         user = User.query.get(subscriptions[channel_id]['user_id'])
         prefered_poopable = user.prefered_poopables[0]
-        target_poopable = poopables[prefered_poopable.id]
+        target_poopable = get_poopable(prefered_poopable.id)
         push_poopable_status(channel_id, target_poopable)
 
     return '', 204
@@ -141,7 +148,7 @@ def message_actions():
     message = onboarding_tutorial.get_successfully_subscribe_message_payload()
 
     response = slack_web_client.chat_postMessage(**message)
-    push_poopable_status(channel, poopables[int(value)])
+    push_poopable_status(channel, get_poopable(int(value)))
 
     return "", 200
 
@@ -194,11 +201,10 @@ def message(payload):
         else:
             prefered_poopable = user.prefered_poopables[0]
             app.logger.info(prefered_poopable)
-            target_poopable = poopables[prefered_poopable.id]
-            app.logger.info(target_poopable)
+            # app.logger.info(target_poopable)
             subscriptions[channel_id] = {
                 "start_time": time_stamp, "user_id": user_id}
-            return push_poopable_status(channel_id, target_poopable)
+            return push_poopable_status(channel_id, get_poopable(prefered_poopable.id))
     elif text.lower() == 'stop':
         return subscriptions.pop(channel_id, None)
     else:

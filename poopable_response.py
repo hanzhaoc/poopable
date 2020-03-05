@@ -21,7 +21,7 @@ class PoopableResponse:
     def _get_poopable_status_block(self, poopable):
         text = (
             self._get_status_sentence(
-                poopable_name=poopable['name'], open=poopable['open'])
+                poopable_name=poopable['name'], open=poopable['opened'])
         )
         return self._get_task_block(text)
 
