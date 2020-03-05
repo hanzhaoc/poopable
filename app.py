@@ -130,6 +130,7 @@ def message_actions():
     user_id = form_json.get('user').get('id')
     channel = form_json.get('channel').get('id')
     value = form_json.get('actions')[0].get('selected_option').get('value')
+    ts = form_json.get('actions')[0].get('action_ts')[0:10]
 
     user = User.query.get(user_id)
     poopable = Poopable.query.get(int(value))
@@ -143,6 +144,8 @@ def message_actions():
     db.session.add(user)
     db.session.commit()
 
+    subscriptions[channel_id] = {
+        "start_time": ts, "user_id": user_id}
     onboarding_tutorial = OnboardingTutorial(channel)
 
     message = onboarding_tutorial.get_successfully_subscribe_message_payload()
