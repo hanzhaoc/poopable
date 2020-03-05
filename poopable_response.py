@@ -20,21 +20,17 @@ class PoopableResponse:
 
     def _get_poopable_status_block(self, poopable):
         text = (
-            self._get_status_sentence(poopable_name=poopable['name'], open=poopable['open'])
-            )
-        information = (
-            ":information_source: *<https://get.slack.help/hc/en-us/articles/206870317-Emoji-reactions|"
-            "Learn How to Use Emoji Reactions>*"
+            self._get_status_sentence(
+                poopable_name=poopable['name'], open=poopable['open'])
         )
-        return self._get_task_block(text, information)
+        return self._get_task_block(text)
 
     @staticmethod
-    def _get_task_block(text, information):
+    def _get_task_block(text):
         return [
             {"type": "section", "text": {"type": "mrkdwn", "text": text}},
-            {"type": "context", "elements": [{"type": "mrkdwn", "text": information}]},
         ]
-    
+
     @staticmethod
     def _get_status_sentence(poopable_name: str, open: bool):
         return f"{':runner:' if open else ':lock:'} The door of {poopable_name} is {'opened' if open else 'closed'}"

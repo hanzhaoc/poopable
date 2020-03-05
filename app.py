@@ -34,27 +34,33 @@ app.config['SQLALCHEMY_DATABASE_URI'] = f"mysql+pymysql://{NAME}:{PASSWORD}@{RDS
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 
-#initialize db models
+# initialize db models
 
 users_prefered_poopables = db.Table('users_prefered_poopables',
-    db.Column('slack_user_id', db.String(9), db.ForeignKey('user.slack_user_id'), primary_key=True),
-    db.Column('poopable_id', db.Integer, db.ForeignKey('poopable.id'), primary_key=True)
-)
+                                    db.Column('slack_user_id', db.String(9), db.ForeignKey(
+                                        'user.slack_user_id'), primary_key=True),
+                                    db.Column('poopable_id', db.Integer, db.ForeignKey(
+                                        'poopable.id'), primary_key=True)
+                                    )
+
 
 class Poopable(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(128), nullable=False, default="")
-    last_update = db.Column(db.String(10), nullable=False, default="0000000000")
+    last_update = db.Column(
+        db.String(10), nullable=False, default="0000000000")
     opened = db.Column(db.Boolean, nullable=False, default='False')
+
 
 class User(db.Model):
     slack_user_id = db.Column(db.String(9), primary_key=True)
     prefered_poopables = db.relationship('Poopable', secondary=users_prefered_poopables, lazy='subquery',
-        backref=db.backref('prefered_by_users', lazy=True))
+                                         backref=db.backref('prefered_by_users', lazy=True))
 
 
 # Initialize a Web API client
-slack_events_adapter = SlackEventAdapter(SLACK_SIGNING_SECRET, "/slack/events", app)
+slack_events_adapter = SlackEventAdapter(
+    SLACK_SIGNING_SECRET, "/slack/events", app)
 slack_web_client = WebClient(token=SLACK_BOT_TOKEN)
 
 onboarding_tutorials_sent = {}
@@ -73,11 +79,13 @@ for db_poopable in db_poopables:
 
 subscriptions = {}
 
+
 def update_poopable_by_event(event):
     target_poopable = poopables[int(event['poopable_id'])]
     if event['event_type'] == 'door':
         target_poopable['open'] = True if event['value'] == 'open' else False
         target_poopable['last_update'] = event['time']
+
 
 @app.route('/poopable/event', methods=['POST'])
 def receive_poopable_event():
@@ -88,8 +96,8 @@ def receive_poopable_event():
         'poopable_id': request.json['poopable_id']
     }
 
-    app.logger.info('receiving event object: '+ json.dumps(event))
-    
+    app.logger.info('receiving event object: ' + json.dumps(event))
+
     update_poopable_by_event(event)
 
     app.logger.info(subscriptions)
@@ -103,6 +111,7 @@ def receive_poopable_event():
 
     return '', 204
 
+
 @app.route("/slack/message_actions", methods=["POST"])
 def message_actions():
 
@@ -112,7 +121,7 @@ def message_actions():
     # Check to see what the user's selection was and update the message accordingly
     # app.logger.info(form_json)
     user_id = form_json.get('user').get('id')
-    channel = form_json.get('id')
+    channel = form_json.get('channel').get('id')
     value = form_json.get('actions')[0].get('selected_option').get('value')
 
     user = User.query.get(user_id)
@@ -127,23 +136,33 @@ def message_actions():
     db.session.add(user)
     db.session.commit()
 
+    onboarding_tutorial = OnboardingTutorial(channel)
+
+    message = onboarding_tutorial.get_successfully_subscribe_message_payload()
+
+    response = slack_web_client.chat_postMessage(**message)
+    push_poopable_status(channel, poopables[int(value)])
+
     return "", 200
+
 
 def start_onboarding(user_id: str, channel_id: str):
 
-    #create user and give a default poopable
-    exists = db.session.query(db.exists().where(User.slack_user_id == user_id)).scalar()
+    # create user and give a default poopable
+    exists = db.session.query(db.exists().where(
+        User.slack_user_id == user_id)).scalar()
     if not exists:
         user = User(slack_user_id=user_id)
         db.session.add(user)
         db.session.commit()
 
-    #create on boarding tutorial and sent it to user
+    # create on boarding tutorial and sent it to user
     onboarding_tutorial = OnboardingTutorial(channel_id)
 
     message = onboarding_tutorial.get_message_payload()
 
     response = slack_web_client.chat_postMessage(**message)
+
 
 def push_poopable_status(channel: str, poopable):
     poopable_response = PoopableResponse(channel, poopable)
@@ -151,6 +170,7 @@ def push_poopable_status(channel: str, poopable):
     message = poopable_response.get_message_payload()
 
     response = slack_web_client.chat_postMessage(**message)
+
 
 @slack_events_adapter.on("message")
 def message(payload):
@@ -160,13 +180,14 @@ def message(payload):
     text = event.get("text")
     time_stamp = event.get('ts')
 
-    if not (event and channel_id and user_id and text and time_stamp): return 'invalid payload', 422
+    if not (event and channel_id and user_id and text and time_stamp):
+        return 'invalid payload', 422
 
     if text.lower() == 'poop':
         user = User.query.get(user_id)
         prefered_poopables = user and user.prefered_poopables
         app.logger.info(prefered_poopables)
-        if user is None:  
+        if user is None:
             return start_onboarding(user_id, channel_id)
         elif len(prefered_poopables) == 0:
             return start_onboarding(user_id, channel_id)
@@ -175,7 +196,8 @@ def message(payload):
             app.logger.info(prefered_poopable)
             target_poopable = poopables[prefered_poopable.id]
             app.logger.info(target_poopable)
-            subscriptions[channel_id] = { "start_time": time_stamp, "user_id":user_id }
+            subscriptions[channel_id] = {
+                "start_time": time_stamp, "user_id": user_id}
             return push_poopable_status(channel_id, target_poopable)
     elif text.lower() == 'stop':
         return subscriptions.pop(channel_id, None)
